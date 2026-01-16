@@ -1,0 +1,22 @@
+<link rel="stylesheet" href="dashboard.css">
+<nav>
+    <button onclick="cerrarSesion()">Salir</button>
+    <a href="admin.html"><button style="background: #6c757d;">Ir a Panel Admin</button></a>
+</nav>
+
+<section id="resumen">
+    <div class="card">
+        <h3>Ventas del Día</h3>
+        <p id="totalCaja">$0.00</p>
+    </div>
+</section>
+
+<input type="text" id="inputBusqueda" placeholder="🔍 Buscar producto para vender..." oninput="filtrarProductos('venta')">
+
+<table>
+    <thead>
+        <tr><th>Producto</th><th>Precio</th><th>Stock</th><th>Acción</th></tr>
+    </thead>
+    <tbody id="listaProductos"></tbody>
+</table>
+<script src="app.js"></script>

@@ -1,0 +1,24 @@
+body { font-family: 'Segoe UI', sans-serif; background-color: #f1f5f9; margin: 0; }
+
+nav { background-color: #1e293b; padding: 15px 5%; display: flex; justify-content: space-between; color: white; }
+
+main { padding: 30px 5%; }
+
+#registro {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+#registro input { padding: 10px; margin-right: 10px; border: 1px solid #cbd5e1; border-radius: 5px; }
+
+.btn-vender { background: #1e293b; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+
+/* Estilos para los botones de la tabla */
+.btn-editar { background: #f59e0b; color: white; border: none; padding: 5px 10px; border-radius: 4px; margin-right: 5px; cursor: pointer; }
+.btn-eliminar { background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+
+table { width: 100%; background: white; border-collapse: collapse; }
+th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: left; }

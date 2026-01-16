@@ -1,0 +1,24 @@
+<link rel="stylesheet" href="admin.css">
+<nav>
+    <a href="dashboard.html"><button>Volver a Ventas</button></a>
+</nav>
+
+<section id="registro">
+    <h2>Registrar/Editar Producto</h2>
+    <input type="text" id="nombrePro" placeholder="Nombre">
+    <input type="number" id="precioPro" placeholder="Precio">
+    <input type="number" id="stockPro" placeholder="Stock">
+    <button id="btnGuardar" onclick="agregarProducto()">Guardar</button>
+</section>
+
+<button onclick="descargarReporte()" style="background: #007bff; width: 100%; margin: 10px 0;">
+    📥 Descargar Reporte para C++
+</button>
+
+<table id="tablaAdmin">
+    <thead>
+        <tr><th>Producto</th><th>Precio</th><th>Stock</th><th>Acciones Admin</th></tr>
+    </thead>
+    <tbody id="listaAdmin"></tbody>
+</table>
+<script src="app.js"></script>
