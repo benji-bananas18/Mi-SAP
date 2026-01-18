@@ -1,7 +1,6 @@
 // --- CONFIGURACIÓN DE URL Y PERSISTENCIA ---
 const URL_API = "https://tu-nueva-url-de-render.onrender.com/api";
 
-
 let inventario = JSON.parse(localStorage.getItem('inventarioSAP')) || [];
 let totalCaja = parseFloat(localStorage.getItem('totalCajaSAP')) || 0;
 
