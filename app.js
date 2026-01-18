@@ -1,6 +1,6 @@
 // --- CONFIGURACIÓN DE URL Y PERSISTENCIA ---
-// REEMPLAZA ESTA URL con la que te dé Render para tu "Web Service" (Backend)
-const URL_API = "https://tu-servicio-backend.onrender.com/api/productos";
+const URL_API = "https://tu-nueva-url-de-render.onrender.com/api";
+
 
 let inventario = JSON.parse(localStorage.getItem('inventarioSAP')) || [];
 let totalCaja = parseFloat(localStorage.getItem('totalCajaSAP')) || 0;
@@ -9,74 +9,123 @@ const esPaginaLogin = document.getElementById('login-container') !== null;
 const esPaginaVentas = document.getElementById('listaProductos') !== null;
 const esPaginaAdmin = document.getElementById('listaAdmin') !== null;
 
-// --- SINCRONIZACIÓN CON EL SERVIDOR (OPCIÓN B) ---
+// --- SINCRONIZACIÓN CON EL SERVIDOR ---
 async function sincronizarConServidor(accion, datosExtra = null) {
-    // Siempre guardamos una copia local por si falla el internet
     localStorage.setItem('inventarioSAP', JSON.stringify(inventario));
     localStorage.setItem('totalCajaSAP', totalCaja.toString());
 
-    console.log(`Sincronizando ${accion} en la nube...`);
-
     try {
-        // Enviamos el inventario completo o el cambio específico al servidor
-        const response = await fetch(URL_API, {
+        const response = await fetch(`${URL_API}/productos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                accion: accion,
-                inventario: inventario,
-                totalCaja: totalCaja,
-                detalle: datosExtra
-            })
+            body: JSON.stringify({ accion, inventario, detalle: datosExtra })
         });
-
-        if (response.ok) {
-            console.log("Servidor actualizado correctamente.");
-        }
+        if (response.ok) console.log("Sincronizado con Render");
     } catch (error) {
-        console.warn("El servidor no respondió. Los cambios se guardaron localmente.");
+        console.warn("Servidor offline. Trabajando en modo local.");
     }
 }
 
-// --- INICIO ---
+// --- SISTEMA DE ROLES Y SEGURIDAD ---
 window.onload = function() {
-    if (!esPaginaLogin && !esAdmin()) {
+    const rol = sessionStorage.getItem('rolUsuario');
+
+    if (!esPaginaLogin && !sessionStorage.getItem('sesionActiva')) {
         window.location.href = "index.html";
+        return;
+    }
+
+    if (esPaginaAdmin && rol !== "ADMIN") {
+        alert("Acceso denegado: Se requieren permisos de Administrador");
+        window.location.href = "dashboard.html";
         return;
     }
 
     if (esPaginaVentas || esPaginaAdmin) {
         actualizarTabla();
-        if (esPaginaVentas) {
-            const displayCaja = document.getElementById('totalCaja');
-            if (displayCaja) displayCaja.innerText = `$${totalCaja.toFixed(2)}`;
+        if (esPaginaVentas && document.getElementById('totalCaja')) {
+            document.getElementById('totalCaja').innerText = `$${totalCaja.toFixed(2)}`;
         }
     }
 };
 
-// --- SEGURIDAD ---
-function esAdmin() {
-    return sessionStorage.getItem('sesionActiva') === 'true';
-}
-
-function iniciarSesion() {
-    const user = document.getElementById('usuario').value;
+// --- LOGIN Y REGISTRO ---
+async function iniciarSesion() {
+    const usuario = document.getElementById('usuario').value;
     const pass = document.getElementById('password').value;
 
-    if (user === "admin" && pass === "sap123") {
-        sessionStorage.setItem('sesionActiva', 'true');
-        window.location.href = "dashboard.html";
-    } else {
-        alert("Usuario o contraseña incorrectos");
+    try {
+        const res = await fetch(`${URL_API}/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, pass })
+        });
+        const data = await res.json();
+
+        if (data.login) {
+            sessionStorage.setItem('sesionActiva', 'true');
+            sessionStorage.setItem('rolUsuario', data.rol);
+            window.location.href = data.rol === "ADMIN" ? "admin.html" : "dashboard.html";
+        } else {
+            alert(data.mensaje || "Error de credenciales");
+        }
+    } catch (e) {
+        // Fallback para pruebas locales si el servidor no está listo
+        if (usuario === "admin" && pass === "sap123") {
+            sessionStorage.setItem('sesionActiva', 'true');
+            sessionStorage.setItem('rolUsuario', 'ADMIN');
+            window.location.href = "admin.html";
+        } else {
+            alert("No se pudo conectar con el servidor de autenticación.");
+        }
     }
 }
 
-function cerrarSesion() {
-    sessionStorage.removeItem('sesionActiva');
-    window.location.href = "index.html";
+async function registrarVendedor() {
+    const nombre = prompt("Nombre completo:");
+    const usuario = prompt("Usuario deseado:");
+    const pass = prompt("Contraseña:");
+
+    if (nombre && usuario && pass) {
+        try {
+            const res = await fetch(`${URL_API}/registro`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, usuario, pass })
+            });
+            const data = await res.json();
+            alert(data.mensaje);
+        } catch (e) {
+            alert("Error al enviar solicitud al servidor.");
+        }
+    }
 }
 
-// --- GESTIÓN DE PRODUCTOS ---
+// --- GESTIÓN DE VENDEDORES (SOLO ADMIN) ---
+async function gestionarNuevosVendedores() {
+    try {
+        const res = await fetch(`${URL_API}/pendientes`);
+        const pendientes = await res.json();
+
+        if (pendientes.length === 0) return alert("No hay solicitudes pendientes.");
+
+        let menu = "Solicitudes:\n" + pendientes.map((u, i) => `${i}. ${u.nombre} (@${u.usuario})`).join("\n");
+        const idx = prompt(menu + "\n\nEscribe el número para APROBAR:");
+
+        if (pendientes[idx]) {
+            await fetch(`${URL_API}/aprobar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuario: pendientes[idx].usuario })
+            });
+            alert("Vendedor activado correctamente.");
+        }
+    } catch (e) {
+        alert("Error al gestionar solicitudes.");
+    }
+}
+
+// --- LÓGICA DE INVENTARIO ---
 async function agregarProducto() {
     const nombre = document.getElementById('nombrePro').value;
     const precio = parseFloat(document.getElementById('precioPro').value);
@@ -85,61 +134,42 @@ async function agregarProducto() {
     if (nombre && !isNaN(precio) && !isNaN(stock)) {
         const nuevo = { id: Date.now(), nombre, precio, stock };
         inventario.push(nuevo);
-        
         actualizarTabla();
         limpiarFormulario();
-        await sincronizarConServidor('AGREGAR_PRODUCTO', nuevo);
-    } else {
-        alert("Completa todos los campos correctamente");
+        await sincronizarConServidor('AGREGAR', nuevo);
     }
 }
 
 async function vender(id) {
-    const producto = inventario.find(p => p.id === id);
-    if (producto && producto.stock > 0) {
-        producto.stock--;
-        totalCaja += producto.precio;
-        
-        const displayCaja = document.getElementById('totalCaja');
-        if (displayCaja) displayCaja.innerText = `$${totalCaja.toFixed(2)}`;
-        
+    const p = inventario.find(item => item.id === id);
+    if (p && p.stock > 0) {
+        p.stock--;
+        totalCaja += p.precio;
+        if (document.getElementById('totalCaja')) {
+            document.getElementById('totalCaja').innerText = `$${totalCaja.toFixed(2)}`;
+        }
         actualizarTabla();
-        await sincronizarConServidor('VENTA', { id: id, nuevoStock: producto.stock });
+        await sincronizarConServidor('VENTA', { id, nuevoStock: p.stock });
     } else {
-        alert("¡Sin stock!");
+        alert("Sin existencias.");
     }
 }
 
-// --- RENDERIZADO ---
 function actualizarTabla() {
-    if (esPaginaVentas) renderizarVentas(inventario);
-    else if (esPaginaAdmin) renderizarAdmin(inventario);
-}
-
-function renderizarVentas(datos) {
-    const tabla = document.getElementById('listaProductos');
-    if (!tabla) return;
-    tabla.innerHTML = datos.map(p => `
+    const container = esPaginaVentas ? document.getElementById('listaProductos') : document.getElementById('listaAdmin');
+    if (!container) return;
+    
+    container.innerHTML = inventario.map(p => `
         <tr style="${p.stock < 5 ? 'color: red; font-weight: bold;' : ''}">
             <td>${p.nombre}</td>
             <td>$${p.precio.toFixed(2)}</td>
             <td>${p.stock}</td>
-            <td><button class="btn-vender" onclick="vender(${p.id})">Vender 1</button></td>
-        </tr>
-    `).join('');
-}
-
-function renderizarAdmin(datos) {
-    const tabla = document.getElementById('listaAdmin');
-    if (!tabla) return;
-    tabla.innerHTML = datos.map(p => `
-        <tr>
-            <td>${p.nombre}</td>
-            <td>$${p.precio.toFixed(2)}</td>
-            <td>${p.stock}</td>
             <td>
-                <button class="btn-editar" onclick="prepararEdicion(${p.id})">Editar</button>
-                <button class="btn-eliminar" onclick="eliminarProducto(${p.id})">Eliminar</button>
+                ${esPaginaVentas 
+                    ? `<button class="btn-vender" onclick="vender(${p.id})">Vender</button>` 
+                    : `<button class="btn-editar" onclick="prepararEdicion(${p.id})">Editar</button>
+                       <button class="btn-eliminar" onclick="eliminarProducto(${p.id})">Eliminar</button>`
+                }
             </td>
         </tr>
     `).join('');
@@ -148,125 +178,34 @@ function renderizarAdmin(datos) {
 function filtrarProductos() {
     const texto = document.getElementById('inputBusqueda').value.toLowerCase();
     const filtrados = inventario.filter(p => p.nombre.toLowerCase().includes(texto));
-    if (esPaginaVentas) renderizarVentas(filtrados);
-    else if (esPaginaAdmin) renderizarAdmin(filtrados);
+    const container = esPaginaVentas ? document.getElementById('listaProductos') : document.getElementById('listaAdmin');
+    
+    container.innerHTML = filtrados.map(p => `
+        <tr>
+            <td>${p.nombre}</td>
+            <td>$${p.precio.toFixed(2)}</td>
+            <td>${p.stock}</td>
+            <td>${esPaginaVentas ? '...' : '...'}</td>
+        </tr>
+    `).join('');
 }
 
-// --- EDICIÓN Y ELIMINACIÓN ---
 async function eliminarProducto(id) {
-    if (confirm("¿Eliminar producto?")) {
+    if (confirm("¿Eliminar?")) {
         inventario = inventario.filter(p => p.id !== id);
         actualizarTabla();
-        await sincronizarConServidor('ELIMINAR_PRODUCTO', { id });
+        await sincronizarConServidor('ELIMINAR', { id });
     }
 }
 
-function prepararEdicion(id) {
-    const p = inventario.find(item => item.id === id);
-    if (!p) return;
-
-    document.getElementById('nombrePro').value = p.nombre;
-    document.getElementById('precioPro').value = p.precio;
-    document.getElementById('stockPro').value = p.stock;
-
-    const btn = document.getElementById('btnGuardar');
-    btn.innerText = "Actualizar Cambios";
-    btn.style.backgroundColor = "#ffc107";
-    btn.onclick = () => confirmarEdicion(id);
-}
-
-async function confirmarEdicion(id) {
-    const index = inventario.findIndex(p => p.id === id);
-    inventario[index].nombre = document.getElementById('nombrePro').value;
-    inventario[index].precio = parseFloat(document.getElementById('precioPro').value);
-    inventario[index].stock = parseInt(document.getElementById('stockPro').value);
-
-    const btn = document.getElementById('btnGuardar');
-    btn.innerText = "Guardar";
-    btn.style.backgroundColor = "#28a745";
-    btn.onclick = agregarProducto;
-
-    actualizarTabla();
-    limpiarFormulario();
-    await sincronizarConServidor('EDITAR_PRODUCTO', inventario[index]);
+function cerrarSesion() {
+    sessionStorage.clear();
+    window.location.href = "index.html";
 }
 
 function limpiarFormulario() {
-    const inputs = ['nombrePro', 'precioPro', 'stockPro'];
-    inputs.forEach(id => {
+    ['nombrePro', 'precioPro', 'stockPro'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = "";
     });
-}
-
-function descargarReporte() {
-    if (inventario.length === 0) return alert("No hay datos");
-    let csv = "ID,Producto,Precio,Stock\n" + inventario.map(p => `${p.id},${p.nombre},${p.precio},${p.stock}`).join("\n");
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'reporte_inventario.csv';
-    a.click();
-}
-
-
-
-
-
-
-
-
-
-// Función para que un nuevo vendedor pida cuenta
-async function registrarVendedor() {
-    const nombre = prompt("Ingresa tu nombre completo:");
-    const user = prompt("Crea un nombre de usuario:");
-    const pass = prompt("Crea una contraseña:");
-
-    if (nombre && user && pass) {
-        try {
-            const res = await fetch(`${URL_API}/registro`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ nombre, usuario: user, pass })
-            });
-            const data = await res.json();
-            alert(data.mensaje);
-        } catch (e) {
-            alert("Error al conectar con el servidor.");
-        }
-    }
-}
-
-// Función exclusiva del Admin para ver y aprobar
-async function gestionarNuevosVendedores() {
-    if (obtenerRol() !== "ADMIN") return;
-
-    try {
-        const res = await fetch(`${URL_API}/pendientes`);
-        const pendientes = await res.json();
-
-        if (pendientes.length === 0) {
-            alert("No hay solicitudes de nuevos vendedores.");
-            return;
-        }
-
-        // Listar y elegir a quién aprobar
-        let lista = "Solicitudes pendientes:\n";
-        pendientes.forEach((u, i) => lista += `${i}. ${u.nombre} (@${u.usuario})\n`);
-        
-        const index = prompt(lista + "\nEscribe el número del usuario para APROBAR:");
-        
-        if (pendientes[index]) {
-            await fetch(`${URL_API}/aprobar`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ usuario: pendientes[index].usuario })
-            });
-            alert("¡Vendedor aprobado!");
-        }
-    } catch (e) {
-        console.error(e);
-    }
 }
